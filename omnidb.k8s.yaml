@@ -1,0 +1,76 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: omnidb
+  labels:
+    app: omnidb
+spec:
+  type: NodePort
+  ports:
+    - port: 80
+      targetPort: 8080
+      nodePort: 32456
+  selector:
+    app: omnidb
+---
+apiVersion: apps/v1beta1
+kind: Deployment
+metadata:
+  name: omnidb
+  labels:
+    app: omnidb
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: omnidb
+  template:
+    metadata:
+      labels:
+        app: omnidb
+    spec:
+      securityContext:
+        runAsUser: 100
+        runAsGroup: 101
+        fsGroup: 101
+      containers:
+        - name: omnidb
+          image: 192.168.51.35:5000/richinfoai/omnidb:v0.1.0
+          ports:
+            - containerPort: 8080
+          resources:
+            requests:
+              cpu: 1
+              memory: 2Gi
+            limits:
+              cpu: 2
+              memory: 4Gi
+#          command: ['bash','-c','sleep 1000000']
+          command: ['bash','-c','python omnidb-server.py --host=0.0.0.0 --port=8080 --path=omnidb -d /etc/omnidb']
+          envFrom:
+            - secretRef:
+                name: db-config
+          env:
+          - name: WORKER_IP
+            valueFrom:
+              configMapKeyRef:
+                name: const-config
+                key: worker-ip
+          - name: WORKER_PORT
+            value: '32456'
+          - name: CUSTOM_PATH
+            value: 'omnidb'
+          - name: LD_LIBRARY_PATH
+            value: /usr/local/oracle/instantclient:$PATH
+          volumeMounts:
+            - name: omnidb-data
+              mountPath: /usr/local/oracle/instantclient
+              subPath: omnidb/lib/instantclient_21_7
+            - name: omnidb-data
+              mountPath: /etc/omnidb
+              subPath: omnidb/config
+
+      volumes:
+        - name: omnidb-data
+          persistentVolumeClaim:
+            claimName: mt-pvc
